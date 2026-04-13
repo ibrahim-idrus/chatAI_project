@@ -1,0 +1,23 @@
+{
+  "name": "@chatai/backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@chatai/db": "*",
+    "@chatai/types": "*",
+    "@chatai/utils": "*",
+    "hono": "^4.12.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260413.1",
+    "@types/node": "^24.12.2",
+    "typescript": "~6.0.2",
+    "wrangler": "^4.74.0"
+  }
+}

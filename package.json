@@ -1,0 +1,17 @@
+{
+  "name": "chatai",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev -w @chatai/frontend",
+    "dev:backend": "npm run dev -w @chatai/backend",
+    "build": "npm run build -w @chatai/db && npm run build -w @chatai/types && npm run build -w @chatai/utils && npm run build -w @chatai/frontend && npm run build -w @chatai/backend",
+    "lint": "eslint .",
+    "db:generate": "npm run generate --workspace=packages/db",
+    "db:migrate": "npm run migrate --workspace=packages/db"
+  }
+}
