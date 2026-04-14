@@ -9,9 +9,11 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.52",
     "@chatai/db": "*",
     "@chatai/types": "*",
     "@chatai/utils": "*",
+    "ai": "^6.0.159",
     "hono": "^4.12.12"
   },
   "devDependencies": {
