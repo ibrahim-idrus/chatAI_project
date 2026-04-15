@@ -1,5 +1,5 @@
 {
-  "id": "0ebe0ebe-9c6d-4052-b773-6986dc6a18cb",
+  "id": "daa7ac27-1e81-4f57-9394-6acec97c1adf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -15,12 +15,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "user_id": {
           "name": "user_id",
           "type": "uuid",
@@ -35,6 +29,12 @@
         },
         "payload": {
           "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ip": {
+          "name": "ip",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -49,19 +49,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "event_logs_org_id_orgs_id_fk": {
-          "name": "event_logs_org_id_orgs_id_fk",
-          "tableFrom": "event_logs",
-          "tableTo": "orgs",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "event_logs_user_id_users_id_fk": {
           "name": "event_logs_user_id_users_id_fk",
           "tableFrom": "event_logs",
@@ -109,7 +96,8 @@
           "name": "content",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "''"
         },
         "token_count": {
           "name": "token_count",
@@ -117,6 +105,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
         },
         "created_at": {
           "name": "created_at",
@@ -144,87 +139,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.orgs": {
-      "name": "orgs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "system_prompt": {
-          "name": "system_prompt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ai_provider": {
-          "name": "ai_provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'openai'"
-        },
-        "ai_model": {
-          "name": "ai_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'gpt-4o'"
-        },
-        "ai_temperature": {
-          "name": "ai_temperature",
-          "type": "numeric(3, 2)",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'0.70'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "orgs_slug_unique": {
-          "name": "orgs_slug_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -307,12 +221,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "user_id": {
           "name": "user_id",
           "type": "uuid",
@@ -333,12 +241,6 @@
           "notNull": true,
           "default": 0
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -356,19 +258,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "threads_org_id_orgs_id_fk": {
-          "name": "threads_org_id_orgs_id_fk",
-          "tableFrom": "threads",
-          "tableTo": "orgs",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "threads_user_id_users_id_fk": {
           "name": "threads_user_id_users_id_fk",
           "tableFrom": "threads",
@@ -399,12 +288,6 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
         },
         "user_id": {
           "name": "user_id",
@@ -442,14 +325,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "provider": {
-          "name": "provider",
+        "model": {
+          "name": "model",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "model": {
-          "name": "model",
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -464,19 +347,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "token_usage_org_id_orgs_id_fk": {
-          "name": "token_usage_org_id_orgs_id_fk",
-          "tableFrom": "token_usage",
-          "tableTo": "orgs",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "token_usage_user_id_users_id_fk": {
           "name": "token_usage_user_id_users_id_fk",
           "tableFrom": "token_usage",
@@ -534,12 +404,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "email": {
           "name": "email",
           "type": "text",
@@ -552,18 +416,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "role": {
           "name": "role",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'member'"
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "default": "'user'"
         },
         "created_at": {
           "name": "created_at",
@@ -581,21 +445,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "users_org_id_orgs_id_fk": {
-          "name": "users_org_id_orgs_id_fk",
-          "tableFrom": "users",
-          "tableTo": "orgs",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "users_email_unique": {

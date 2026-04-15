@@ -5,7 +5,8 @@
   "main": "./src/index.ts",
   "scripts": {
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate"
+    "migrate": "drizzle-kit migrate",
+    "push": "drizzle-kit push"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -15,6 +16,7 @@
     "@types/node": "^24.12.2",
     "dotenv": "^16.6.1",
     "drizzle-kit": "^0.31.10",
+    "postgres": "^3.4.9",
     "typescript": "~6.0.2"
   }
 }
