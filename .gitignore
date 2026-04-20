@@ -33,6 +33,7 @@ worker-configuration.d.ts
 .env
 .env.local
 .env.*.local
+.dev.vars
 
 # TanStack Router generated files
 apps/frontend/src/routeTree.gen.ts

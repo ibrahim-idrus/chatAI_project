@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "type": "module",
   "main": "./src/index.ts",
+  "scripts": {
+    "dev": "node -e \"console.log('@chatai/utils: no dev script')\""
+  },
   "devDependencies": {
     "typescript": "~6.0.2"
   }

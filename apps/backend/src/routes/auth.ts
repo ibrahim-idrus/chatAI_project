@@ -15,13 +15,14 @@ type Variables = {
   role: string
   sessionId: string
 }
-// buat isi form dan validasi apakah benar
+// Validasi input form register menggunakan Zod sebelum data menyentuh DB
 const registerSchema = z.object({
   email: z.string().email('Email tidak valid'),
   password: z.string().min(8, 'Password minimal 8 karakter'),
   displayName: z.string().min(2, 'Nama minimal 2 karakter'),
 })
-// buat isi form dan validasi apakah benar
+
+// Validasi input form login menggunakan Zod sebelum data menyentuh DB
 const loginSchema = z.object({
   email: z.string().email('Email tidak valid'),
   password: z.string().min(1, 'Password wajib diisi'),
@@ -34,7 +35,6 @@ const JWT_EXPIRY = '7d'
 export const authRoutes = new Hono<{ Bindings: Env; Variables: Variables }>()
 
 // POST /api/auth/register
-// parsed(validasi) dari schemar register dan hasil pengecekan oleh zod
 authRoutes.post('/register', async (c) => {
   const body = await c.req.json()
   const parsed = registerSchema.safeParse(body)
@@ -43,10 +43,11 @@ authRoutes.post('/register', async (c) => {
     const errors = parsed.error.flatten().fieldErrors
     return c.json({ error: 'Validasi gagal', details: errors }, 400)
   }
-// manggil db dari apps\backend\src\lib\db.ts
+
   const { email, password, displayName } = parsed.data
   const db = getDb(c.env)
-// jika sudah ada email yg suda ada maka akan error pesan email sdah terdaftar
+
+  // Cek apakah email sudah terdaftar sebelum insert
   const existing = await db
     .select({ id: users.id })
     .from(users)
@@ -57,8 +58,9 @@ authRoutes.post('/register', async (c) => {
     return c.json({ error: 'Email sudah terdaftar' }, 409)
   }
 
+  // Hash password sebelum disimpan — password asli tidak pernah masuk DB
   const passwordHash = await bcrypt.hash(password, 10)
-// menginput form ke db dan pasword juga di hash
+
   await db.insert(users).values({
     email,
     passwordHash,
@@ -66,9 +68,9 @@ authRoutes.post('/register', async (c) => {
     role: 'user',
   })
 
-  // // ngambil IP addres yg dikirm kan oleh claudflare jika tida ada berarti lewat proxy dan akan di simpan di db
+  // IP dari Cloudflare lebih akurat; x-forwarded-for fallback jika tidak lewat Cloudflare
   const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? null
-// log user yg sudah melakukan register
+
   logEvent(db, {
     eventType: 'user.register',
     payload: { email },
@@ -90,7 +92,8 @@ authRoutes.post('/login', async (c) => {
 
   const { email, password } = parsed.data
   const db = getDb(c.env)
-  // ngambil IP addres yg dikirm kan oleh claudflare jika tida ada berarti lewat proxy
+
+  // IP dari Cloudflare lebih akurat; x-forwarded-for fallback jika tidak lewat Cloudflare
   const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? null
 
   const [user] = await db
@@ -98,7 +101,7 @@ authRoutes.post('/login', async (c) => {
     .from(users)
     .where(eq(users.email, email))
     .limit(1)
-    //ip address yg tdi di panggil oleh logevent dan tersimpan di db 
+
   if (!user) {
     logEvent(db, {
       eventType: 'user.login_failed',
@@ -107,7 +110,8 @@ authRoutes.post('/login', async (c) => {
     })
     return c.json({ error: 'Email atau password salah' }, 401)
   }
-// membandingkan password yg di hash dengan pasword yg diketikkan
+
+  // bcrypt tidak membuka hash — dia hash ulang password input lalu bandingkan hasilnya
   const passwordMatch = await bcrypt.compare(password, user.passwordHash)
 
   if (!passwordMatch) {
@@ -137,12 +141,11 @@ authRoutes.post('/login', async (c) => {
       { expirationTtl: SESSION_TTL },
     )
 
-    // SHA-256 hash of sessionId for DB storage
+    // Hash sessionId sebelum disimpan ke DB — sessionId asli hanya ada di KV dan JWT
     const hashBuffer = await crypto.subtle.digest(
       'SHA-256',
       new TextEncoder().encode(sessionId),
     )
-    // hasil dari hash dibuat jdi bisa disimpan ke db
     const tokenHash = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
@@ -152,7 +155,9 @@ authRoutes.post('/login', async (c) => {
       tokenHash,
       expiresAt,
     })
-// mengerim JWT ke browser sebagai cookie
+
+    // HttpOnly: JS di browser tidak bisa baca cookie ini (anti XSS)
+    // sameSite Strict: cookie tidak dikirim dari website lain (anti CSRF)
     setCookie(c, 'token', jwt, {
       httpOnly: true,
       secure: true,
@@ -160,7 +165,8 @@ authRoutes.post('/login', async (c) => {
       maxAge: SESSION_TTL,
       path: '/',
     })
-// catat di db bahwa user berhasil login
+
+    // Catat aktivitas login berhasil ke event_logs
     logEvent(db, {
       eventType: 'user.login',
       userId: user.id,
@@ -189,7 +195,21 @@ authRoutes.post('/logout', authMiddleware, async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env)
 
-  await c.env.SESSION_KV.delete(sessionId)
+  // Hash sessionId dulu karena yang tersimpan di DB adalah hashnya, bukan sessionId asli
+  const hashBuffer = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(sessionId),
+  )
+  const tokenHash = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+
+  // Hapus session dari KV dan DB agar tabel sessions tidak menumpuk
+  await Promise.all([
+    c.env.SESSION_KV.delete(sessionId),
+    db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)),
+  ])
+
   deleteCookie(c, 'token', { path: '/' })
 
   logEvent(db, {
@@ -200,7 +220,8 @@ authRoutes.post('/logout', authMiddleware, async (c) => {
   return c.json({ message: 'Logout berhasil' })
 })
 
-// GET /api/auth/me  (requires auth) gunanya untuk memanggil getme yg ada di lib/api untuk menerima JWT dan cookie
+// GET /api/auth/me  (requires auth)
+// Dipanggil oleh __root.tsx saat app pertama buka untuk mengambil data user yang sedang login
 authRoutes.get('/me', authMiddleware, async (c) => {
   const userId = c.get('userId')
   const db = getDb(c.env)

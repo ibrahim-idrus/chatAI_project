@@ -4,6 +4,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
+    "dev": "node -e \"console.log('@chatai/db: no dev server (use db:push/db:migrate)')\"",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push"

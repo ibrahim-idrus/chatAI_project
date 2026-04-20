@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { login, logout, getMe } from '../lib/api'
+import { login, logout } from '../lib/api'
 import { useAuthStore } from '../store/auth'
 
-//logic awal login dimulai dan masuk ke dasboard chat 
+// Dipanggil saat user submit form login.
+// Setelah berhasil: isi store + redirect ke /chat.
 export function useLogin() {
   const setUser = useAuthStore((s) => s.setUser)
   const navigate = useNavigate()
@@ -12,8 +13,8 @@ export function useLogin() {
   return useMutation({
     mutationFn: login,
     onSuccess: async (data) => {
-      // Cancel any in-progress getMe fetches (retries from unauthenticated state)
-      // before seeding the cache, so stale 401 responses can't override fresh data.
+      // Batalkan fetch getMe yang sedang berjalan agar response 401 lama
+      // tidak menimpa data user yang baru saja login.
       await queryClient.cancelQueries({ queryKey: ['me'] })
       queryClient.setQueryData(['me'], data.user)
       setUser(data.user)
@@ -22,7 +23,8 @@ export function useLogin() {
   })
 }
 
-// logic kalo dia logout
+// Dipanggil saat user klik tombol logout.
+// Setelah berhasil: kosongkan store + redirect ke /login.
 export function useLogout() {
   const clearUser = useAuthStore((s) => s.clearUser)
   const navigate = useNavigate()
@@ -33,23 +35,5 @@ export function useLogout() {
       clearUser()
       navigate({ to: '/login' })
     },
-  })
-}
-
-
-// jika kita refresh app masih mengingat ktia klo kita sudah login
-export function useMe() {
-  const setUser = useAuthStore((s) => s.setUser)
-
-  return useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const user = await getMe()
-      setUser(user)
-      return user
-    },
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-    throwOnError: false,
   })
 }

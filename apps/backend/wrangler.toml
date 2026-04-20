@@ -5,6 +5,9 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 NODE_ENV = "production"
+AI_MODEL = "gpt-4o-mini"
+AI_PROVIDER = "openai"
+SYSTEM_PROMPT = "You are a helpful assistant."
 
 [ai]
 binding = "AI"

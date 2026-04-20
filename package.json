@@ -7,6 +7,8 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:setup": "npm run db:push && npm run dev",
     "dev:frontend": "npm run dev -w @chatai/frontend",
     "dev:backend": "npm run dev -w @chatai/backend",
     "build": "npm run build -w @chatai/db && npm run build -w @chatai/types && npm run build -w @chatai/utils && npm run build -w @chatai/frontend && npm run build -w @chatai/backend",
@@ -14,5 +16,8 @@
     "db:generate": "npm run generate --workspace=packages/db",
     "db:migrate": "npm run migrate --workspace=packages/db",
     "db:push": "npm run push --workspace=packages/db"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

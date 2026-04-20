@@ -1,13 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useAuthStore } from '../store/auth'
 
 export const Route = createFileRoute('/')({
-  component: HomePage,
+  beforeLoad: () => {
+    const { user } = useAuthStore.getState()
+    throw redirect({ to: user ? '/chat' : '/login' })
+  },
+  component: () => null,
 })
-
-function HomePage() {
-  return (
-    <main>
-      <h1>acme-chat</h1>
-    </main>
-  )
-}
