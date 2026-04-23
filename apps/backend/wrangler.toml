@@ -27,3 +27,11 @@ queue = "chat-retry-queue"
 queue = "chat-retry-queue"
 max_batch_size = 10
 max_retries = 3
+
+[[durable_objects.bindings]]
+name = "THREAD_CHAT_DO"
+class_name = "ThreadChatDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ThreadChatDO"]
