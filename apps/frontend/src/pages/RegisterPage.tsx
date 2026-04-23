@@ -4,7 +4,11 @@ import { z } from 'zod'
 import { useNavigate, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { register as apiRegister } from '../lib/api'
-import './auth.css'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Sparkles, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react'
 
 const schema = z
   .object({
@@ -46,107 +50,120 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="auth-bg">
-      {/* Header */}
-      <div className="auth-header">
-        <div className="auth-logo purple">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="#6366f1"/>
-            <path d="M19 14L19.75 17.25L23 18L19.75 18.75L19 22L18.25 18.75L15 18L18.25 17.25L19 14Z" fill="#818cf8"/>
-          </svg>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-100 flex flex-col items-center justify-center p-4">
+      {/* Brand */}
+      <div className="flex flex-col items-center gap-2 mb-8">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg">
+          <Sparkles className="w-6 h-6 text-white" />
         </div>
-        <h1 className="auth-title dark">chatAI</h1>
-        <p className="auth-subtitle">Design your digital thoughts with AI precision.</p>
+        <h1 className="text-2xl font-bold text-indigo-600 tracking-tight">chatAI</h1>
+        <p className="text-sm text-muted-foreground">Design your digital thoughts with AI precision.</p>
       </div>
 
-      {/* Card */}
-      <div className="auth-card">
-        <p className="auth-card-title">Create your account</p>
+      <Card className="w-full max-w-sm shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+        <CardHeader className="space-y-1 pb-4">
+          <CardTitle className="text-xl font-semibold">Create your account</CardTitle>
+          <CardDescription>Join us and start your AI journey today.</CardDescription>
+        </CardHeader>
 
-        {successMessage && <p className="form-success">{successMessage}</p>}
-        {serverError && <p className="form-error">{serverError}</p>}
-
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          {/* Full Name */}
-          <div className="field">
-            <label htmlFor="displayName">Full Name</label>
-            <div className="input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
-              </svg>
-              <input
-                id="displayName"
-                type="text"
-                placeholder="Leonardo da Vinci"
-                autoComplete="name"
-                {...register('displayName')}
-              />
+        <CardContent>
+          {successMessage && (
+            <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-green-50 text-green-700 text-sm">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              {successMessage}
             </div>
-            {errors.displayName && <span className="field-error">{errors.displayName.message}</span>}
-          </div>
-
-          {/* Email */}
-          <div className="field">
-            <label htmlFor="email">Email Address</label>
-            <div className="input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-              </svg>
-              <input
-                id="email"
-                type="email"
-                placeholder="artist@canvas.ai"
-                autoComplete="email"
-                {...register('email')}
-              />
+          )}
+          {serverError && (
+            <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {serverError}
             </div>
-            {errors.email && <span className="field-error">{errors.email.message}</span>}
-          </div>
+          )}
 
-          {/* Password */}
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <div className="input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1 1.7 0 3.1 1.4 3.1 3.1v2z"/>
-              </svg>
-              <input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="new-password"
-                {...register('password')}
-              />
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="displayName">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="displayName"
+                  type="text"
+                  placeholder="Leonardo da Vinci"
+                  autoComplete="name"
+                  className="pl-9"
+                  {...register('displayName')}
+                />
+              </div>
+              {errors.displayName && <p className="text-xs text-destructive">{errors.displayName.message}</p>}
             </div>
-            {errors.password && <span className="field-error">{errors.password.message}</span>}
-          </div>
 
-          {/* Confirm Password */}
-          <div className="field">
-            <label htmlFor="confirmPassword">Confirm</label>
-            <div className="input-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18 8h-1V6c0-2.8-2.2-5-5-5S7 3.2 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.7 1.4-3.1 3.1-3.1 1.7 0 3.1 1.4 3.1 3.1v2z"/>
-              </svg>
-              <input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="new-password"
-                {...register('confirmPassword')}
-              />
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email Address</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="artist@canvas.ai"
+                  autoComplete="email"
+                  className="pl-9"
+                  {...register('email')}
+                />
+              </div>
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
-            {errors.confirmPassword && <span className="field-error">{errors.confirmPassword.message}</span>}
-          </div>
 
-          <button type="submit" disabled={isSubmitting} className="btn-primary">
-            {isSubmitting ? 'Creating...' : <> Create Account </>}
-          </button>
-        </form>
-        <p className="auth-footer-link">
-          Already have an account? <Link to="/login">Sign in here</Link>
-        </p>
-      </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="pl-9"
+                  {...register('password')}
+                />
+              </div>
+              {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="pl-9"
+                  {...register('confirmPassword')}
+                />
+              </div>
+              {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700"
+            >
+              {isSubmitting ? 'Creating...' : 'Create Account'}
+            </Button>
+          </form>
+        </CardContent>
+
+        <CardFooter className="justify-center pt-0">
+          <p className="text-sm text-muted-foreground">
+            Already have an account?{' '}
+            <Link to="/login" className="text-indigo-600 font-medium hover:underline">
+              Sign in here
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

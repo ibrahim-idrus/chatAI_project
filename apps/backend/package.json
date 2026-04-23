@@ -13,11 +13,14 @@
     "@chatai/db": "*",
     "@chatai/types": "*",
     "@chatai/utils": "*",
+    "@hono/zod-validator": "^0.7.6",
     "@types/bcryptjs": "^2.4.6",
     "ai": "^6.0.159",
     "bcryptjs": "^3.0.3",
     "hono": "^4.12.12",
-    "jose": "^6.2.2"
+    "jose": "^6.2.2",
+    "react-markdown": "^10.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260413.1",
