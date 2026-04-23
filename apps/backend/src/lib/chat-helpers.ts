@@ -10,8 +10,8 @@ type CompleteMessageParams = {
   threadId: string
   userId: string
   text: string
-  promptTokens: number      // normalized name from result.usage.promptTokens
-  completionTokens: number  // normalized name from result.usage.completionTokens
+  promptTokens: number      // mapped from usage.inputTokens in the DO's generate()
+  completionTokens: number  // mapped from usage.outputTokens in the DO's generate()
   totalTokens: number
 }
 

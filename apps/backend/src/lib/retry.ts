@@ -4,15 +4,8 @@ import { getDb } from './db'
 import type { Env } from '../env'
 import type { DOStartPayload } from '@chatai/types'
 
-export type RetryPayload = {
-  userId: string
-  threadId: string
-  messageId: string
-  messages: { role: 'user' | 'assistant'; content: string }[]
-}
-
 export async function handleRetry(
-  batch: MessageBatch<RetryPayload>,
+  batch: MessageBatch<DOStartPayload>,
   env: Env,
 ): Promise<void> {
   for (const msg of batch.messages) {
@@ -27,7 +20,7 @@ export async function handleRetry(
       await stub.fetch('http://do/do/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload satisfies DOStartPayload),
+        body: JSON.stringify(payload),
       })
 
       // Queue consumer does not need to read the stream —

@@ -7,7 +7,7 @@ import { chatRoutes } from './routes/chat'
 import { chatDoRoutes } from './routes/chat-do'
 import { authMiddleware } from './middleware/auth'
 import { handleRetry } from './lib/retry'
-import type { RetryPayload } from './lib/retry'
+import type { DOStartPayload } from '@chatai/types'
 import type { ExportedHandlerQueueHandler } from '@cloudflare/workers-types'
 
 // Named export required by Cloudflare Workers runtime — DO classes must be
@@ -54,5 +54,5 @@ app.route('/api', chatRoutes)
 
 export default {
   fetch: app.fetch,
-  queue: handleRetry as ExportedHandlerQueueHandler<Env, RetryPayload>,
+  queue: handleRetry as ExportedHandlerQueueHandler<Env, DOStartPayload>,
 }

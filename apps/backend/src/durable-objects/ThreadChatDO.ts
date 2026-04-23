@@ -35,7 +35,20 @@ export class ThreadChatDO extends DurableObject<Env> {
   private handleStream(): Response {
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
     const writer = writable.getWriter()
-    this.writers.add(writer)
+    const encoder = new TextEncoder()
+
+    // Flush accumulated text for clients connecting mid-stream or after completion
+    if (this.accumulated) {
+      writer.write(encoder.encode(this.accumulated)).catch(() => {})
+    }
+
+    // If generation is already done, close the writer immediately
+    if (!this.generating) {
+      writer.close().catch(() => {})
+    } else {
+      // Still generating — register for live chunks
+      this.writers.add(writer)
+    }
 
     return new Response(readable, {
       headers: {
