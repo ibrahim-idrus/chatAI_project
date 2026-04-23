@@ -23,7 +23,7 @@ app.use(
     origin: (origin) => {
       const allowed = ['http://localhost:5173', 'http://localhost:4173']
       return allowed.includes(origin) ? origin : 'http://localhost:5173'
-    },
+    },  
     credentials: true,
   }),
 )

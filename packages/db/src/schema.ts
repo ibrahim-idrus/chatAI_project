@@ -4,7 +4,6 @@ import {
   text,
   integer,
   timestamp,
-  numeric,
   jsonb,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'

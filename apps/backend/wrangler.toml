@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 NODE_ENV = "production"
-AI_MODEL = "gpt-4o-mini"
+AI_MODEL = "gpt-4.1-nano"
 AI_PROVIDER = "openai"
 SYSTEM_PROMPT = "You are a helpful assistant."
 
@@ -15,6 +15,7 @@ binding = "AI"
 [[kv_namespaces]]
 binding = "SESSION_KV"
 id = "a43063553af247229d0ee9c362e31bd3"
+preview_id = "a43063553af247229d0ee9c362e31bd3"
 
 # Producer — chatai-backend bisa kirim ke queue ini
 [[queues.producers]]

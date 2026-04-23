@@ -9,6 +9,7 @@ export const MessageSchema = z.object({
   role: MessageRoleSchema,
   content: z.string(),
   tokenCount: z.number().default(0),
+  status: z.enum(['pending', 'completed', 'failed']).default('completed'),
   createdAt: z.date(),
 })
 export type Message = z.infer<typeof MessageSchema>
