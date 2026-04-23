@@ -63,10 +63,9 @@ export class ThreadChatDO extends DurableObject<Env> {
   }
 
   private async generate(payload: DOStartPayload): Promise<void> {
-    // Full implementation added in Task 8
-    // Broadcast empty to satisfy compiler reference to broadcast
+    // Placeholder — full AI streaming implementation added in Task 8
     await this.broadcast(this.accumulated)
-    console.log('[ThreadChatDO] generate called for message', payload.messageId)
+    console.log('[ThreadChatDO] generate placeholder for message', payload.messageId)
     this.generating = false
     for (const writer of this.writers) {
       try { await writer.close() } catch { /* ignore */ }
