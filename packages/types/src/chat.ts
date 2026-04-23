@@ -30,3 +30,10 @@ export const SendMessageSchema = z.object({
   threadId: z.string().optional(),
 })
 export type SendMessageInput = z.infer<typeof SendMessageSchema>
+
+export type DOStartPayload = {
+  messageId: string
+  userId: string
+  threadId: string
+  messages: { role: 'user' | 'assistant'; content: string }[]
+}
