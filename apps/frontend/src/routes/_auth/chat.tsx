@@ -1,11 +1,32 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '../../store/auth'
 import { useLogout } from '../../hooks/useAuth'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import './chat.css'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import {
+  Sparkles,
+  MessageSquare,
+  User,
+  Settings,
+  LogOut,
+  Plus,
+  Send,
+  Copy,
+  RefreshCw,
+  Check,
+  History,
+  Loader2,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/_auth/chat')({
   component: ChatPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    threadId: typeof search.threadId === 'string' ? search.threadId : undefined,
+  }),
 })
 
 type Message = {
@@ -24,10 +45,16 @@ function formatTime(date: Date) {
 function ChatPage() {
   const user = useAuthStore((s) => s.user)
   const { mutate: logout } = useLogout()
+  const { threadId: urlThreadId } = Route.useSearch()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isThinking, setIsThinking] = useState(false)
+  const [isFetchingThread, setIsFetchingThread] = useState(false)
+  const [threadTitle, setThreadTitle] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [threadId, setThreadId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -39,6 +66,42 @@ function ChatPage() {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
+  // Load existing thread when navigated from history
+  useEffect(() => {
+    if (!urlThreadId) return
+    let cancelled = false
+
+    const loadThread = async () => {
+      setIsFetchingThread(true)
+      try {
+        const res = await fetch(`/api/threads/${urlThreadId}`, { credentials: 'include' })
+        if (!res.ok) throw new Error('Thread not found')
+        const data = await res.json() as {
+          thread: { id: string; title: string }
+          messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string }>
+        }
+        if (cancelled) return
+        setThreadId(data.thread.id)
+        setThreadTitle(data.thread.title)
+        setMessages(
+          data.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: new Date(m.createdAt),
+          })),
+        )
+      } catch {
+        // silently fail — stay on empty chat
+      } finally {
+        if (!cancelled) setIsFetchingThread(false)
+      }
+    }
+
+    loadThread()
+    return () => { cancelled = true }
+  }, [urlThreadId])
+
   const handleAutoResize = () => {
     const ta = textareaRef.current
     if (!ta) return
@@ -46,45 +109,48 @@ function ChatPage() {
     ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`
   }
 
+  const getOrCreateThread = async (): Promise<string> => {
+    if (threadId) return threadId
+    const res = await fetch('/api/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error('Gagal membuat thread')
+    const data = await res.json() as { id: string }
+    setThreadId(data.id)
+    return data.id
+  }
+
   const sendMessage = async (text: string) => {
     const content = text.trim()
     if (!content || isLoading) return
 
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    }
-    const updatedMessages = [...messages, userMsg]
-    setMessages(updatedMessages)
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content, timestamp: new Date() }
+    setMessages((prev) => [...prev, userMsg])
     setInputValue('')
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setIsLoading(true)
+    setIsThinking(true)
 
     const aiMsgId = crypto.randomUUID()
-    setMessages((prev) => [
-      ...prev,
-      { id: aiMsgId, role: 'assistant', content: '', timestamp: new Date() },
-    ])
 
     try {
+      const currentThreadId = await getOrCreateThread()
       const res = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
+        body: JSON.stringify({ threadId: currentThreadId, content }),
       })
-
       if (!res.ok || !res.body) throw new Error('Stream failed')
+
+      // First chunk arrived — stop thinking, add assistant bubble
+      setIsThinking(false)
+      setMessages((prev) => [...prev, { id: aiMsgId, role: 'assistant', content: '', timestamp: new Date() }])
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -94,11 +160,16 @@ function ChatPage() {
         )
       }
     } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === aiMsgId ? { ...m, content: 'Maaf, terjadi kesalahan. Coba lagi.' } : m,
-        ),
-      )
+      setIsThinking(false)
+      setMessages((prev) => {
+        const hasAiMsg = prev.some((m) => m.id === aiMsgId)
+        if (hasAiMsg) {
+          return prev.map((m) =>
+            m.id === aiMsgId ? { ...m, content: 'Maaf, terjadi kesalahan. Coba lagi.' } : m,
+          )
+        }
+        return [...prev, { id: aiMsgId, role: 'assistant', content: 'Maaf, terjadi kesalahan. Coba lagi.', timestamp: new Date() }]
+      })
     } finally {
       setIsLoading(false)
     }
@@ -120,209 +191,276 @@ function ChatPage() {
   const handleNewChat = () => {
     setMessages([])
     setInputValue('')
+    setThreadId(null)
+    setThreadTitle(null)
+    navigate({ to: '/chat', search: { threadId: undefined } })
   }
 
   const initials = user?.displayName?.charAt(0).toUpperCase() ?? '?'
+  const isLastMsgStreaming = (id: string) =>
+    isLoading && id === messages[messages.length - 1]?.id
 
   return (
-    <div className="chat-shell">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
-      <aside className="chat-sidebar">
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="#ffffff"/>
-            </svg>
+      <aside className="w-60 shrink-0 flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 px-4 py-5">
+          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <p className="sidebar-brand-name">chatAI</p>
+          <span className="font-semibold text-base tracking-tight">chatAI</span>
         </div>
 
-        <button className="sidebar-new-btn" onClick={handleNewChat}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </svg>
-          New Chat
-        </button>
+        <div className="px-3 pb-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleNewChat}
+            className="w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
+          </Button>
+        </div>
 
-        <p className="sidebar-section-label">Menu</p>
-        <nav className="sidebar-nav">
-          <button className="sidebar-nav-item active">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-            </svg>
+        <Separator className="bg-sidebar-border" />
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-3 space-y-1">
+          <p className="px-2 py-1 text-xs font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+            Menu
+          </p>
+          <button className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium bg-sidebar-accent text-sidebar-accent-foreground">
+            <MessageSquare className="w-4 h-4" />
             Chat
           </button>
-          <button className="sidebar-nav-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
-            </svg>
+          <Link
+            to="/HistoryPage"
+            className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <History className="w-4 h-4" />
             History
-          </button>
-          <button className="sidebar-nav-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-            </svg>
+          </Link>
+          <Link
+            to="/profile"
+            className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          >
+            <User className="w-4 h-4" />
+            Profile
+          </Link>
+          <button className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+            <Settings className="w-4 h-4" />
             Settings
           </button>
         </nav>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <div className="avatar-circle" style={{ width: 34, height: 34, fontSize: 13 }}>
-              {initials}
+        <Separator className="bg-sidebar-border" />
+
+        {/* User */}
+        <div className="p-3">
+          <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
+            <Avatar className="w-8 h-8 shrink-0">
+              <AvatarFallback className="bg-sidebar-primary text-white text-xs font-semibold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.displayName ?? ''}</p>
+              <p className="text-xs text-sidebar-foreground/50">Free plan</p>
             </div>
-            <div className="sidebar-user-info">
-              <p className="sidebar-user-name">{user?.displayName ?? ''}</p>
-              <p className="sidebar-user-role">Free plan</p>
-            </div>
-            <button className="sidebar-logout-btn" onClick={() => logout()} title="Logout">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-              </svg>
+            <button
+              onClick={() => logout()}
+              title="Logout"
+              className="p-1 rounded hover:bg-sidebar-border text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </aside>
 
       {/* Main */}
-      <div className="chat-main">
-      {/* Header */}
-      <header className="chat-header">
-        <div className="chat-header-left">
-          <h1 className="chat-header-title">New Chat</h1>
-        </div>
-        <div className="chat-header-right">
-          <button className="btn-new-chat" onClick={handleNewChat}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19 13H13v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-            </svg>
-            New
-          </button>
-          <div className="avatar-circle" title={user?.displayName ?? ''}>
-            {initials}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Header */}
+        <header className="flex items-center justify-between px-6 py-4 border-b bg-background">
+          <h1 className="font-semibold text-base truncate max-w-xs">
+            {isFetchingThread ? 'Memuat...' : (threadTitle ?? 'New Chat')}
+          </h1>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={handleNewChat} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              New
+            </Button>
+            <Link to="/profile">
+              <Avatar className="w-8 h-8 cursor-pointer">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Messages */}
-      <div className="chat-messages">
-        {messages.length === 0 ? (
-          <div className="chat-empty">
-            <div className="empty-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
-                  fill="#9ca3af"
-                />
-                <path
-                  d="M19 14L19.75 17.25L23 18L19.75 18.75L19 22L18.25 18.75L15 18L18.25 17.25L19 14Z"
-                  fill="#d1d5db"
-                />
-              </svg>
+        {/* Messages */}
+        <ScrollArea className="flex-1 px-6 py-4">
+          {isFetchingThread ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Memuat percakapan...</p>
             </div>
-            <p className="empty-title">Cognitive Canvas</p>
-            <p className="empty-sub">Start a conversation...</p>
-          </div>
-        ) : (
-          messages.map((msg) =>
-            msg.role === 'assistant' ? (
-              <div key={msg.id} className="msg-ai-row">
-                <div className="ai-badge">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
-                      fill="#f59e0b"
-                    />
-                    <path
-                      d="M19 14L19.75 17.25L23 18L19.75 18.75L19 22L18.25 18.75L15 18L18.25 17.25L19 14Z"
-                      fill="#fcd34d"
-                    />
-                  </svg>
-                </div>
-                <div className="ai-card">
-                  <p className="ai-card-label">Cognitive AI</p>
-                  <p className={`ai-card-body${isLoading && msg.content === '' ? ' streaming' : msg.id === messages[messages.length - 1]?.id && isLoading ? ' streaming' : ''}`}>
-                    {msg.content || ' '}
-                  </p>
-                  {!isLoading || msg.id !== messages[messages.length - 1]?.id ? (
-                    <div className="ai-card-actions">
-                      <button
-                        className={`ai-action-btn${copiedId === msg.id ? ' copied' : ''}`}
-                        onClick={() => handleCopy(msg.id, msg.content)}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
-                        </svg>
-                        {copiedId === msg.id ? 'Copied' : 'Copy'}
-                      </button>
-                      <button
-                        className="ai-action-btn"
-                        onClick={() => {
-                          const lastUser = [...messages].reverse().find((m) => m.role === 'user')
-                          if (lastUser) sendMessage(lastUser.content)
-                        }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-                        </svg>
-                        Regenerate
-                      </button>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+                <Sparkles className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-semibold text-base">Cognitive Canvas</p>
+                <p className="text-sm text-muted-foreground mt-1">Start a conversation...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6 max-w-3xl mx-auto">
+              {messages.map((msg) =>
+                msg.role === 'assistant' ? (
+                  <div key={msg.id} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
                     </div>
-                  ) : null}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                        Cognitive AI
+                      </p>
+                      <div className="bg-card border rounded-xl p-4 shadow-sm">
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                          {isLastMsgStreaming(msg.id) && (
+                            <span className="inline-block w-0.5 h-4 bg-foreground/70 ml-0.5 animate-blink align-text-bottom" />
+                          )}
+                        </p>
+                      </div>
+                      {(!isLoading || !isLastMsgStreaming(msg.id)) && msg.content && (
+                        <div className="flex items-center gap-1 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                            onClick={() => handleCopy(msg.id, msg.content)}
+                          >
+                            {copiedId === msg.id ? (
+                              <Check className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                            {copiedId === msg.id ? 'Copied' : 'Copy'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                            onClick={() => {
+                              const lastUser = [...messages].reverse().find((m) => m.role === 'user')
+                              if (lastUser) sendMessage(lastUser.content)
+                            }}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Regenerate
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-[75%]">
+                      <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 text-right">
+                        Read {formatTime(msg.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ),
+              )}
+              {isThinking && (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                      Cognitive AI
+                    </p>
+                    <div className="bg-card border rounded-xl px-4 py-3 shadow-sm inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div key={msg.id} className="msg-user-row">
-                <div className="msg-user-wrap">
-                  <div className="msg-user-bubble">{msg.content}</div>
-                  <span className="msg-user-time">Read {formatTime(msg.timestamp)}</span>
-                </div>
-              </div>
-            ),
-          )
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </ScrollArea>
 
-      {/* Bottom */}
-      <div className="chat-bottom">
-        {messages.length === 0 && (
-          <div className="chip-row">
-            {CHIPS.map((chip) => (
-              <button key={chip} className="chip" onClick={() => sendMessage(chip)}>
-                {chip}
-              </button>
-            ))}
+        {/* Bottom Input */}
+        <div className="border-t bg-background px-6 py-4">
+          <div className="max-w-3xl mx-auto">
+            {messages.length === 0 && (
+              <div className="flex gap-2 mb-3 flex-wrap">
+                {CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => sendMessage(chip)}
+                    className="px-3 py-1.5 text-xs rounded-full border border-border bg-secondary text-secondary-foreground hover:bg-accent hover:border-accent transition-colors"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className={cn(
+              "flex items-end gap-3 bg-muted rounded-xl p-3 border transition-all",
+              isLoading
+                ? "border-amber-300/60 bg-amber-50/30 dark:bg-amber-950/10"
+                : "border-border focus-within:border-ring focus-within:ring-1 focus-within:ring-ring",
+            )}>
+              <textarea
+                ref={textareaRef}
+                className="flex-1 bg-transparent text-sm resize-none outline-none placeholder:text-muted-foreground min-h-[24px] max-h-[120px] leading-relaxed disabled:opacity-50"
+                placeholder={isLoading ? 'AI sedang membalas...' : 'Ask anything...'}
+                value={inputValue}
+                rows={1}
+                onChange={(e) => {
+                  setInputValue(e.target.value)
+                  handleAutoResize()
+                }}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+              />
+              <Button
+                size="icon"
+                onClick={() => sendMessage(inputValue)}
+                disabled={isLoading || !inputValue.trim()}
+                className="w-8 h-8 shrink-0 rounded-lg"
+                aria-label="Send"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-center text-xs text-muted-foreground mt-2">
+              Press <kbd className="px-1 py-0.5 text-xs bg-muted border rounded">Enter</kbd> to send,{' '}
+              <kbd className="px-1 py-0.5 text-xs bg-muted border rounded">Shift+Enter</kbd> for new line
+            </p>
           </div>
-        )}
-
-        <div className="chat-input-row">
-          <textarea
-            ref={textareaRef}
-            className="chat-input"
-            placeholder="Ask anything..."
-            value={inputValue}
-            rows={1}
-            onChange={(e) => {
-              setInputValue(e.target.value)
-              handleAutoResize()
-            }}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-          />
-          <button
-            className="send-btn"
-            onClick={() => sendMessage(inputValue)}
-            disabled={isLoading || !inputValue.trim()}
-            aria-label="Send"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
         </div>
-
-      </div>
       </div>
     </div>
   )
