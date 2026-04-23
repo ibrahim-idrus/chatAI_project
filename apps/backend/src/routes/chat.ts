@@ -2,12 +2,10 @@ import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { eq, and, asc, desc, sql } from 'drizzle-orm'
-import { threads, messages, tokenUsage } from '@chatai/db'
+import { threads, messages } from '@chatai/db'
 import { getDb } from '../lib/db'
 import { logEvent } from '../lib/logger'
-import { streamAIResponse } from '../lib/stream'
 import type { Env } from '../env'
-import type { RetryPayload } from '../lib/retry'
 
 type Variables = {
   userId: string
@@ -152,118 +150,6 @@ chatRoutes.delete('/threads/:id', async (c) => {
 
   return c.json({ message: 'Thread deleted' })
 })
-
-// ─── POST /api/chat/stream ────────────────────────────────────────────────────
-chatRoutes.post(
-  '/chat/stream',
-  zValidator(
-    'json',
-    z.object({
-      threadId: z.string(),
-      content: z.string().min(1).max(10_000),
-    }),
-  ),
-  async (c) => {
-    const db = getDb(c.env)
-    const userId = c.var.userId
-    const { threadId, content } = c.req.valid('json')
-
-    const [thread] = await db
-      .select({ id: threads.id })
-      .from(threads)
-      .where(and(eq(threads.id, threadId), eq(threads.userId, userId)))
-
-    if (!thread) return c.json({ error: 'Thread not found' }, 404)
-
-    const [userMsg] = await db
-      .insert(messages)
-      .values({
-        threadId,
-        role: 'user',
-        content,
-        tokenCount: content.length,
-        status: 'completed',
-      })
-      .returning()
-
-    logEvent(db, {
-      eventType: 'message.sent',
-      userId,
-      payload: { threadId, messageId: userMsg.id },
-    })
-
-    const [assistantMsg] = await db
-      .insert(messages)
-      .values({ threadId, role: 'assistant', content: '', status: 'pending', tokenCount: 0 })
-      .returning()
-
-    const history = await db
-      .select({ role: messages.role, content: messages.content })
-      .from(messages)
-      .where(and(eq(messages.threadId, threadId), eq(messages.status, 'completed')))
-      .orderBy(asc(messages.createdAt))
-
-    const chatHistory = history.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
-
-    try {
-      const response = await streamAIResponse({
-        messages: chatHistory,
-        env: c.env,
-        onFinish: async ({ text, usage }) => {
-          const { promptTokens, completionTokens, totalTokens } = usage
-
-          await db
-            .update(messages)
-            .set({ content: text, status: 'completed', tokenCount: completionTokens })
-            .where(eq(messages.id, assistantMsg.id))
-
-          await db.insert(tokenUsage).values({
-            userId,
-            threadId,
-            messageId: assistantMsg.id,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            model: c.env.AI_MODEL,
-            provider: c.env.AI_PROVIDER,
-          })
-
-          await db
-            .update(threads)
-            .set({
-              totalTokens: sql`${threads.totalTokens} + ${totalTokens}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(threads.id, threadId))
-
-          logEvent(db, {
-            eventType: 'message.completed',
-            userId,
-            payload: { threadId, promptTokens, completionTokens, model: c.env.AI_MODEL },
-          })
-        },
-      })
-
-      return response
-    } catch (err) {
-      console.error('[POST /chat/stream] streamAIResponse failed:', err)
-
-      const payload: RetryPayload = {
-        userId,
-        threadId,
-        messageId: assistantMsg.id,
-        messages: chatHistory,
-      }
-
-      await c.env.CHAT_RETRY_QUEUE.send(payload)
-
-      return c.json({ error: 'Gagal generate response' }, 503)
-    }
-  },
-)
 
 // ─── GET /api/messages/:messageId/status ──────────────────────────────────────
 chatRoutes.get('/messages/:messageId/status', async (c) => {
