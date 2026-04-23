@@ -4,10 +4,15 @@ import { secureHeaders } from 'hono/secure-headers'
 import type { Env } from './env'
 import { authRoutes } from './routes/auth'
 import { chatRoutes } from './routes/chat'
+import { chatDoRoutes } from './routes/chat-do'
 import { authMiddleware } from './middleware/auth'
 import { handleRetry } from './lib/retry'
 import type { RetryPayload } from './lib/retry'
 import type { ExportedHandlerQueueHandler } from '@cloudflare/workers-types'
+
+// Named export required by Cloudflare Workers runtime — DO classes must be
+// named exports from the entry module, not inside the default export object.
+export { ThreadChatDO } from './durable-objects/ThreadChatDO'
 
 type Variables = {
   userId: string
@@ -41,6 +46,10 @@ app.use('/api/threads/*', authMiddleware)
 app.use('/api/chat/*', authMiddleware)
 app.use('/api/messages/*', authMiddleware)
 
+// chatDoRoutes MUST be registered before chatRoutes.
+// Hono matches the first registered route. chatDoRoutes handles POST /chat/stream;
+// chatRoutes handles all other thread/message endpoints.
+app.route('/api', chatDoRoutes)
 app.route('/api', chatRoutes)
 
 export default {
