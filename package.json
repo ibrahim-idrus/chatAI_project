@@ -18,6 +18,8 @@
     "db:push": "npm run push --workspace=packages/db"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@testing-library/react": "^16.3.2",
+    "concurrently": "^9.2.1",
+    "happy-dom": "^20.9.0"
   }
 }

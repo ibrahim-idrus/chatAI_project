@@ -7,5 +7,7 @@ export type Env = {
   SYSTEM_PROMPT: string
   AI: Ai
   SESSION_KV: KVNamespace
-  CHAT_RETRY_QUEUE: Queue
+  CHAT_THREAD_DO: DurableObjectNamespace
+  AI_PROCESSING_QUEUE: Queue
+  THREAD_NAMING_QUEUE: Queue
 }

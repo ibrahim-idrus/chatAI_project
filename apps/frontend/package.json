@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",
-    "@ai-sdk/react": "^3.0.170",
     "@chatai/types": "*",
     "@chatai/utils": "*",
     "@hookform/resolvers": "^3.3.4",
@@ -24,7 +23,6 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.76.1",
     "@tanstack/react-router": "^1.120.5",
-    "ai": "^6.0.159",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.8.0",

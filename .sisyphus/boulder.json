@@ -1,0 +1,32 @@
+{
+  "active_plan": "/Users/ali/projects/paragentix/chatAI_project/.sisyphus/plans/async-chat-do.md",
+  "started_at": "2026-05-03T12:29:52.527Z",
+  "session_ids": [
+    "ses_2122ef838ffefWhCSYSlqFT1Vb",
+    "ses_211976133ffefRupyLwmhKvaYl",
+    "ses_211973fefffeLnUM7kiXrBmGrY",
+    "ses_211971edeffe47aAkfQm5VFxye",
+    "ses_21196d3e3ffeEZ0mXSGWZclaLI",
+    "ses_21173292ffferPOEqX5EEzYeMY"
+  ],
+  "session_origins": {
+    "ses_2122ef838ffefWhCSYSlqFT1Vb": "direct",
+    "ses_211976133ffefRupyLwmhKvaYl": "appended",
+    "ses_211973fefffeLnUM7kiXrBmGrY": "appended",
+    "ses_211971edeffe47aAkfQm5VFxye": "appended",
+    "ses_21196d3e3ffeEZ0mXSGWZclaLI": "appended",
+    "ses_21173292ffferPOEqX5EEzYeMY": "appended"
+  },
+  "plan_name": "async-chat-do",
+  "agent": "atlas",
+  "task_sessions": {
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_21173292ffferPOEqX5EEzYeMY",
+      "agent": "oracle",
+      "updated_at": "2026-05-03T15:56:58.632Z"
+    }
+  }
+}
