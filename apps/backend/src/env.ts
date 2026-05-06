@@ -8,4 +8,5 @@ export type Env = {
   AI: Ai
   SESSION_KV: KVNamespace
   CHAT_THREAD_DO: DurableObjectNamespace
+  AI_PROCESSING_QUEUE: Queue
 }

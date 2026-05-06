@@ -1,13 +1,12 @@
 import { DurableObject } from 'cloudflare:workers'
-import { streamText } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
-import { eq, asc, sql } from 'drizzle-orm'
-import { messages, threads, tokenUsage } from '@chatai/db'
+import { eq } from 'drizzle-orm'
+import { messages } from '@chatai/db'
 import type { Env } from '../env'
 import { parseWsClientMessage, serializeWsServerMessage } from '../lib/ws-protocol'
 import { validateSession } from '../lib/session'
 import { getDb } from '../lib/db'
 import { logEvent } from '../lib/logger'
+import type { QueueMessagePayload } from '../lib/queue-consumer'
 
 export class ChatThreadDO extends DurableObject<Env> {
   private threadId: string
@@ -150,88 +149,82 @@ export class ChatThreadDO extends DurableObject<Env> {
     this.currentMessageId = assistantMsg.id
     await this.ctx.storage.put('currentMessageId', assistantMsg.id)
 
-    await this.processWithRetry(msg.threadId, userId, assistantMsg.id)
+    this.broadcastStatus('processing')
+
+    await this.sendToQueue({
+      threadId: msg.threadId,
+      userId,
+      messageId: assistantMsg.id,
+      content: msg.content,
+      model: this.env.AI_MODEL,
+      runNum: 1,
+    })
   }
 
-  private async processWithRetry(threadId: string, userId: string, messageId: string, maxRetries = 3) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  private async sendToQueue(payload: QueueMessagePayload) {
+    try {
+      await this.env.AI_PROCESSING_QUEUE.send(payload)
+    } catch {
       try {
-        await this.runAiStream(threadId, userId, messageId)
-        return
-      } catch (err) {
-        if (attempt >= maxRetries) {
-          try {
-            const db = getDb(this.env)
-            await db.update(messages)
-              .set({ status: 'failed' })
-              .where(eq(messages.id, messageId))
-          } catch {
-            // best effort
+        const db = getDb(this.env)
+        await db.update(messages)
+          .set({ status: 'failed' })
+          .where(eq(messages.id, payload.messageId))
+      } catch {
+        // best effort
+      }
+      this.broadcastError('Maaf, terjadi kesalahan. Coba lagi.')
+    }
+  }
+
+  private async handleRpc(body: unknown): Promise<Response> {
+    const rpc = body as Record<string, unknown>
+    const type = rpc.type
+
+    if (type === 'stream_token') {
+      const token = rpc.token as string
+      if (token) {
+        this.broadcastToken(token)
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+
+    if (type === 'stream_complete') {
+      const messageId = rpc.messageId as string
+      const tokenCount = rpc.tokenCount as number
+      this.broadcastDone(messageId, tokenCount)
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+
+    if (type === 'stream_error') {
+      const message = rpc.message as string
+      this.broadcastError(message ?? 'Maaf, terjadi kesalahan. Coba lagi.')
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+
+    if (type === 'get_status') {
+      return new Response(JSON.stringify({
+        threadId: this.threadId,
+        userId: this.userId,
+        connections: this.connections.size,
+        currentMessageId: this.currentMessageId,
+      }), { status: 200 })
+    }
+
+    if (type === 'validate_session') {
+      if (this.sessionId) {
+        const session = await this.env.SESSION_KV.get(this.sessionId)
+        if (!session) {
+          for (const ws of this.connections) {
+            ws.close(4001, 'Session expired')
           }
-          this.broadcastError('Maaf, terjadi kesalahan. Coba lagi.')
+          this.connections.clear()
         }
       }
-    }
-  }
-
-  private async runAiStream(threadId: string, userId: string, messageId: string) {
-    const db = getDb(this.env)
-
-    const history = await db
-      .select({ role: messages.role, content: messages.content })
-      .from(messages)
-      .where(eq(messages.threadId, threadId))
-      .orderBy(asc(messages.createdAt))
-
-    const chatHistory = history.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
-
-    const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY })
-    const result = streamText({
-      model: openai(this.env.AI_MODEL),
-      system: this.env.SYSTEM_PROMPT,
-      messages: chatHistory,
-    })
-
-    for await (const textChunk of result.textStream) {
-      this.broadcastToken(textChunk)
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
     }
 
-    const text = await result.text
-    const usage = await result.usage
-
-    const promptTokens = usage.inputTokens ?? 0
-    const completionTokens = usage.outputTokens ?? 0
-    const totalTokens = usage.totalTokens ?? 0
-
-    await db.update(messages)
-      .set({ content: text, status: 'completed', tokenCount: completionTokens })
-      .where(eq(messages.id, messageId))
-
-    await db.insert(tokenUsage).values({
-      userId,
-      threadId,
-      messageId,
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      model: this.env.AI_MODEL,
-      provider: this.env.AI_PROVIDER,
-    })
-
-    await db.update(threads)
-      .set({ totalTokens: sql`${threads.totalTokens} + ${totalTokens}`, updatedAt: new Date() })
-      .where(eq(threads.id, threadId))
-
-    logEvent(db, {
-      eventType: 'message.completed',
-      userId,
-      payload: { threadId, promptTokens, completionTokens, model: this.env.AI_MODEL },
-    })
-
-    this.broadcastDone(messageId, completionTokens)
+    return new Response(JSON.stringify({ error: 'Invalid RPC type' }), { status: 400 })
   }
 
   protected broadcastToken(token: string) {
@@ -283,35 +276,6 @@ export class ChatThreadDO extends DurableObject<Env> {
         this.connections.delete(ws)
       }
     }
-  }
-
-  private async handleRpc(body: unknown): Promise<Response> {
-    const rpcBody = body as Record<string, unknown>
-    const type = rpcBody.type
-
-    if (type === 'get_status') {
-      return new Response(JSON.stringify({
-        threadId: this.threadId,
-        userId: this.userId,
-        connections: this.connections.size,
-        currentMessageId: this.currentMessageId,
-      }), { status: 200 })
-    }
-
-    if (type === 'validate_session') {
-      if (this.sessionId) {
-        const session = await this.env.SESSION_KV.get(this.sessionId)
-        if (!session) {
-          for (const ws of this.connections) {
-            ws.close(4001, 'Session expired')
-          }
-          this.connections.clear()
-        }
-      }
-      return new Response(JSON.stringify({ ok: true }), { status: 200 })
-    }
-
-    return new Response(JSON.stringify({ error: 'Invalid RPC type' }), { status: 400 })
   }
 
   getCurrentMessageId(): string | null {

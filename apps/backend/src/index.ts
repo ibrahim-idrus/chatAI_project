@@ -6,6 +6,7 @@ import { authRoutes } from './routes/auth'
 import { threadRoutes } from './routes/threads'
 import { authMiddleware } from './middleware/auth'
 import { ChatThreadDO } from './durable-objects/ChatThreadDO'
+import { handleAiProcessing } from './lib/queue-consumer'
 
 type Variables = {
   userId: string
@@ -66,6 +67,8 @@ export default {
 
     return app.fetch(request, env, ctx)
   },
+
+  queue: handleAiProcessing,
 }
 
 export { ChatThreadDO }

@@ -25,3 +25,12 @@ class_name = "ChatThreadDO"
 [[migrations]]
 tag = "v1"
 new_classes = ["ChatThreadDO"]
+
+# Queue — AI processing offloaded from DO to async worker
+[[queues.consumers]]
+queue = "ai_processing"
+max_retries = 2
+
+[[queues.producers]]
+queue = "ai_processing"
+binding = "AI_PROCESSING_QUEUE"

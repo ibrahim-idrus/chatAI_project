@@ -166,6 +166,8 @@ function createMockState(options: { threadId?: string; userId?: string | null; m
   return { state, initPromise, storageMap, acceptWebSocket: mockAcceptWebSocket }
 }
 
+let queueSendMock = mock(() => Promise.resolve())
+
 function createMockEnv(): Env {
   return {
     DATABASE_URL: 'postgres://test',
@@ -177,6 +179,7 @@ function createMockEnv(): Env {
     AI: {} as Ai,
     SESSION_KV: { get: mock(() => Promise.resolve(null)) } as unknown as KVNamespace,
     CHAT_THREAD_DO: {} as unknown as DurableObjectNamespace,
+    AI_PROCESSING_QUEUE: { send: queueSendMock } as unknown as Queue,
   } as Env
 }
 
@@ -278,25 +281,28 @@ describe('ChatThreadDO', () => {
     expect(connections.has(ws)).toBe(false)
   })
 
-  it('processMessage inserts user + assistant messages and runs AI stream', async () => {
+  it('processMessage inserts user + assistant messages and sends to queue', async () => {
     resetMocks()
+    queueSendMock.mockClear()
     const { state, initPromise } = createMockState({ threadId: 'test-thread-id', userId: 'user-123' })
     const env = createMockEnv()
     const do_ = new ChatThreadDO(state, env)
     await initPromise.current
 
-    const broadcastSpy = mock(() => {})
-    Object.defineProperty(do_, 'broadcastToken', { value: broadcastSpy, writable: true })
-
-    const doneSpy = mock(() => {})
-    Object.defineProperty(do_, 'broadcastDone', { value: doneSpy, writable: true })
+    const statusSpy = mock(() => {})
+    Object.defineProperty(do_, 'broadcastStatus', { value: statusSpy, writable: true })
 
     await (do_ as unknown as { processMessage: (msg: { threadId: string; content: string }) => Promise<void> }).processMessage({ threadId: 'test-thread-id', content: 'hello' })
 
     expect(mockDbOps.filter(op => op.op === 'insert').length).toBe(2)
-    expect(broadcastSpy).toHaveBeenCalledTimes(3)
-    expect(doneSpy).toHaveBeenCalledTimes(1)
-    expect(doneSpy).toHaveBeenCalledWith('assistant-msg-789', 3)
+    expect(statusSpy).toHaveBeenCalledTimes(1)
+    expect(statusSpy).toHaveBeenCalledWith('processing')
+    expect(queueSendMock).toHaveBeenCalledTimes(1)
+    const queuePayload = queueSendMock.mock.calls[0][0] as Record<string, unknown>
+    expect(queuePayload.threadId).toBe('test-thread-id')
+    expect(queuePayload.userId).toBe('user-123')
+    expect(queuePayload.content).toBe('hello')
+    expect(queuePayload.messageId).toBe('assistant-msg-789')
   })
 
   it('handleRpc get_status returns thread info', async () => {
