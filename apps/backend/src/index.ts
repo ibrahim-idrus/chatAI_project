@@ -3,11 +3,9 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import type { Env } from './env'
 import { authRoutes } from './routes/auth'
-import { chatRoutes } from './routes/chat'
+import { threadRoutes } from './routes/threads'
 import { authMiddleware } from './middleware/auth'
-import { handleRetry } from './lib/retry'
-import type { RetryPayload } from './lib/retry'
-import type { ExportedHandlerQueueHandler } from '@cloudflare/workers-types'
+import { ChatThreadDO } from './durable-objects/ChatThreadDO'
 
 type Variables = {
   userId: string
@@ -32,18 +30,42 @@ app.use('/api/*', secureHeaders())
 
 app.get('/health', (c) => c.json({ ok: true }))
 
-// Auth routes — no auth middleware
 app.route('/api/auth', authRoutes)
 
-// Protected routes — require auth
 app.use('/api/threads', authMiddleware)
 app.use('/api/threads/*', authMiddleware)
-app.use('/api/chat/*', authMiddleware)
 app.use('/api/messages/*', authMiddleware)
 
-app.route('/api', chatRoutes)
+app.route('/api', threadRoutes)
 
 export default {
-  fetch: app.fetch,
-  queue: handleRetry as ExportedHandlerQueueHandler<Env, RetryPayload>,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname.startsWith('/api/chat/ws/')) {
+      const threadId = url.pathname.split('/').pop()
+      if (!threadId) return new Response('Bad Request', { status: 400 })
+
+      const cookie = request.headers.get('cookie') ?? ''
+      const token = cookie.split(';').find((c) => c.trim().startsWith('token='))?.split('=')[1]
+      if (!token) return new Response('Unauthorized', { status: 401 })
+
+      const doId = env.CHAT_THREAD_DO.idFromName(threadId)
+      const stub = env.CHAT_THREAD_DO.get(doId)
+
+      const doUrl = new URL(request.url)
+      doUrl.pathname = '/ws'
+      doUrl.searchParams.set('token', token)
+      doUrl.searchParams.set('threadId', threadId)
+
+      return stub.fetch(new Request(doUrl.toString(), {
+        headers: request.headers,
+        method: 'GET',
+      }))
+    }
+
+    return app.fetch(request, env, ctx)
+  },
 }
+
+export { ChatThreadDO }

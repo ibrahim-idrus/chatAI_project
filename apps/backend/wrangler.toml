@@ -17,13 +17,11 @@ binding = "SESSION_KV"
 id = "a43063553af247229d0ee9c362e31bd3"
 preview_id = "a43063553af247229d0ee9c362e31bd3"
 
-# Producer — chatai-backend bisa kirim ke queue ini
-[[queues.producers]]
-binding = "CHAT_RETRY_QUEUE"
-queue = "chat-retry-queue"
+# DO — ChatThreadDO menangani state thread secara terisolasi
+[[durable_objects.bindings]]
+name = "CHAT_THREAD_DO"
+class_name = "ChatThreadDO"
 
-# Consumer — chatai-backend proses pesan dari queue ini
-[[queues.consumers]]
-queue = "chat-retry-queue"
-max_batch_size = 10
-max_retries = 3
+[[migrations]]
+tag = "v1"
+new_classes = ["ChatThreadDO"]
