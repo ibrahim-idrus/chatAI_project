@@ -34,3 +34,12 @@ max_retries = 2
 [[queues.producers]]
 queue = "ai_processing"
 binding = "AI_PROCESSING_QUEUE"
+
+# Queue — Thread naming (auto-generate title from first message)
+[[queues.consumers]]
+queue = "thread_naming"
+max_retries = 1
+
+[[queues.producers]]
+queue = "thread_naming"
+binding = "THREAD_NAMING_QUEUE"

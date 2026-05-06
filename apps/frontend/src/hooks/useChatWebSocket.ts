@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ChatWebSocket } from '../lib/chat-ws'
 
 export type Message = {
@@ -18,6 +19,8 @@ export function useChatWebSocket() {
 
   const wsRef = useRef<ChatWebSocket | null>(null)
   const assistantMsgIdRef = useRef<string | null>(null)
+  const onThreadNameRef = useRef<((title: string) => void) | null>(null)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     wsRef.current = new ChatWebSocket()
@@ -86,6 +89,11 @@ export function useChatWebSocket() {
         }
       })
 
+      ws.onThreadName((title: string) => {
+        queryClient.invalidateQueries({ queryKey: ['threads', 'history'] })
+        onThreadNameRef.current?.(title)
+      })
+
       ws.connect(threadId)
     })
   }, [])
@@ -143,5 +151,6 @@ export function useChatWebSocket() {
     sendMessage,
     connect,
     disconnect,
+    setOnThreadName: (cb: (title: string) => void) => { onThreadNameRef.current = cb },
   }
 }

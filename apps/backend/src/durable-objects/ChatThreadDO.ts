@@ -7,6 +7,7 @@ import { validateSession } from '../lib/session'
 import { getDb } from '../lib/db'
 import { logEvent } from '../lib/logger'
 import type { QueueMessagePayload } from '../lib/queue-consumer'
+import type { ThreadNamingPayload } from '../lib/thread-naming'
 
 export class ChatThreadDO extends DurableObject<Env> {
   private threadId: string
@@ -124,6 +125,13 @@ export class ChatThreadDO extends DurableObject<Env> {
       return
     }
 
+    const existingMessages = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(eq(messages.threadId, msg.threadId))
+      .limit(1)
+    const isFirstMessage = existingMessages.length === 0
+
     const [userMsg] = await db.insert(messages).values({
       threadId: msg.threadId,
       role: 'user',
@@ -138,6 +146,8 @@ export class ChatThreadDO extends DurableObject<Env> {
       payload: { threadId: msg.threadId, messageId: userMsg.id },
     })
 
+    
+
     const [assistantMsg] = await db.insert(messages).values({
       threadId: msg.threadId,
       role: 'assistant',
@@ -151,7 +161,7 @@ export class ChatThreadDO extends DurableObject<Env> {
 
     this.broadcastStatus('processing')
 
-    await this.sendToQueue({
+    await this.sendToAIProcessingQueue({
       threadId: msg.threadId,
       userId,
       messageId: assistantMsg.id,
@@ -159,9 +169,13 @@ export class ChatThreadDO extends DurableObject<Env> {
       model: this.env.AI_MODEL,
       runNum: 1,
     })
+
+    if (isFirstMessage) {
+      await this.sendToNamingQueue({ threadId: msg.threadId, userId })
+    }
   }
 
-  private async sendToQueue(payload: QueueMessagePayload) {
+  private async sendToAIProcessingQueue(payload: QueueMessagePayload) {
     try {
       await this.env.AI_PROCESSING_QUEUE.send(payload)
     } catch {
@@ -174,6 +188,14 @@ export class ChatThreadDO extends DurableObject<Env> {
         // best effort
       }
       this.broadcastError('Maaf, terjadi kesalahan. Coba lagi.')
+    }
+  }
+
+  private async sendToNamingQueue(payload: ThreadNamingPayload) {
+    try {
+      await this.env.THREAD_NAMING_QUEUE.send(payload)
+    } catch {
+      // best effort — thread naming is non-critical
     }
   }
 
@@ -199,6 +221,14 @@ export class ChatThreadDO extends DurableObject<Env> {
     if (type === 'stream_error') {
       const message = rpc.message as string
       this.broadcastError(message ?? 'Maaf, terjadi kesalahan. Coba lagi.')
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+
+    if (type === 'thread_name_updated') {
+      const title = rpc.title as string
+      if (title) {
+        this.broadcastThreadName(title)
+      }
       return new Response(JSON.stringify({ ok: true }), { status: 200 })
     }
 
@@ -268,6 +298,18 @@ export class ChatThreadDO extends DurableObject<Env> {
 
   protected broadcastStatus(status: string) {
     const msg = serializeWsServerMessage({ type: 'status', status })
+    for (const ws of this.connections) {
+      if (ws.readyState !== 1) continue
+      try {
+        ws.send(msg)
+      } catch {
+        this.connections.delete(ws)
+      }
+    }
+  }
+
+  protected broadcastThreadName(title: string) {
+    const msg = serializeWsServerMessage({ type: 'thread_name', title })
     for (const ws of this.connections) {
       if (ws.readyState !== 1) continue
       try {

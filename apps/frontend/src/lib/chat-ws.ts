@@ -3,6 +3,7 @@ type DoneCallback = (data: { messageId: string; tokenCount: number }) => void
 type ErrorCallback = (msg: string) => void
 type StatusCallback = (status: string) => void
 type OpenCallback = () => void
+type ThreadNameCallback = (title: string) => void
 
 type WsServerMessage =
   | { type: 'token'; content: string }
@@ -10,6 +11,7 @@ type WsServerMessage =
   | { type: 'error'; message: string }
   | { type: 'pong' }
   | { type: 'status'; status: string }
+  | { type: 'thread_name'; title: string }
 
 export class ChatWebSocket {
   private ws: WebSocket | null = null
@@ -25,6 +27,7 @@ export class ChatWebSocket {
   private _onError: ErrorCallback | null = null
   private _onStatus: StatusCallback | null = null
   private _onOpen: OpenCallback | null = null
+  private _onThreadName: ThreadNameCallback | null = null
 
   get isConnected(): boolean {
     return this.connected
@@ -86,6 +89,10 @@ export class ChatWebSocket {
     this._onOpen = cb
   }
 
+  onThreadName(cb: ThreadNameCallback): void {
+    this._onThreadName = cb
+  }
+
   private _getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${protocol}//${window.location.host}/api/chat/ws/${this.threadId}`
@@ -138,6 +145,9 @@ export class ChatWebSocket {
         break
       case 'status':
         this._onStatus?.(msg.status)
+        break
+      case 'thread_name':
+        this._onThreadName?.(msg.title)
         break
       case 'pong':
         break

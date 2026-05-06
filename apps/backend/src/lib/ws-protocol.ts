@@ -46,12 +46,18 @@ const statusSchema = z.object({
   status: z.string(),
 })
 
+const threadNameSchema = z.object({
+  type: z.literal('thread_name'),
+  title: z.string(),
+})
+
 export const wsServerMessageSchema = z.discriminatedUnion('type', [
   tokenSchema,
   doneSchema,
   errorSchema,
   pongSchema,
   statusSchema,
+  threadNameSchema,
 ])
 
 export type WsServerMessage = z.infer<typeof wsServerMessageSchema>

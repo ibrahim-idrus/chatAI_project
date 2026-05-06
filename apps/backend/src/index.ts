@@ -7,6 +7,9 @@ import { threadRoutes } from './routes/threads'
 import { authMiddleware } from './middleware/auth'
 import { ChatThreadDO } from './durable-objects/ChatThreadDO'
 import { handleAiProcessing } from './lib/queue-consumer'
+import type { QueueMessagePayload } from './lib/queue-consumer'
+import { handleThreadNaming } from './lib/thread-naming'
+import type { ThreadNamingPayload } from './lib/thread-naming'
 
 type Variables = {
   userId: string
@@ -68,7 +71,17 @@ export default {
     return app.fetch(request, env, ctx)
   },
 
-  queue: handleAiProcessing,
+  async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
+    const queueName = batch.queue
+
+    if (queueName === 'ai_processing') {
+      return handleAiProcessing(batch as MessageBatch<QueueMessagePayload>, env)
+    }
+
+    if (queueName === 'thread_naming') {
+      return handleThreadNaming(batch as MessageBatch<ThreadNamingPayload>, env)
+    }
+  },
 }
 
 export { ChatThreadDO }

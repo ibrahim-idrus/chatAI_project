@@ -29,6 +29,7 @@ function ChatPage() {
     sendMessage: wsSendMessage,
     connect,
     disconnect,
+    setOnThreadName,
   } = useChatWebSocket()
 
   const [inputValue, setInputValue] = useState('')
@@ -46,6 +47,10 @@ function ChatPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, scrollToBottom])
+
+  useEffect(() => {
+    setOnThreadName((title) => setThreadTitle(title))
+  }, [setOnThreadName])
 
   useEffect(() => {
     if (!urlThreadId) return
